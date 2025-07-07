@@ -1,0 +1,20 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# agenda medica
+
+## contexto
+esse sistema deve fazer o resgistro de uma agenda medica onde eu devo amazenar os campos
+
+
+## tabelas
+medico
+nome = texto
+especialidade = texto
+
+agenda
+medico = medico
+data = date time
+status = [livre, ocupado]
