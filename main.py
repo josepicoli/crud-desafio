@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.database import init_database
+from app.database import create_tables
 from app.routers import medicos
+from app.routers import agenda
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicação"""
-    # Inicializar banco de dados na inicialização
-    init_database()
+    # Criar tabelas na inicialização
+    create_tables()
     yield
 
 app = FastAPI(
@@ -19,6 +20,7 @@ app = FastAPI(
 
 # Incluir routers
 app.include_router(medicos.router)
+app.include_router(agenda.router)
 
 @app.get("/")
 def read_root():

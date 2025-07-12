@@ -1,137 +1,155 @@
-import sqlite3
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 from typing import List, Optional
 from datetime import datetime
-from .database import get_connection
-from .schemas import MedicoCreate, MedicoUpdate, MedicoResponse
+from . import models, schemas
 
-def create_medico(medico: MedicoCreate) -> MedicoResponse:
-    """Cria um novo médico"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO medico (nome, especialidade)
-            VALUES (?, ?)
-        """, (medico.nome, medico.especialidade))
-        
-        medico_id = cursor.lastrowid
-        conn.commit()
-        
-        # Buscar o médico criado
-        cursor.execute("SELECT * FROM medico WHERE id = ?", (medico_id,))
-        medico_data = cursor.fetchone()
-        
-        return MedicoResponse(
-            id=medico_data['id'],
-            nome=medico_data['nome'],
-            especialidade=medico_data['especialidade'],
-            created_at=datetime.fromisoformat(medico_data['created_at']),
-            updated_at=datetime.fromisoformat(medico_data['updated_at'])
-        )
+# CRUD para Médicos
+def create_medico(db: Session, medico: schemas.MedicoCreate) -> models.Medico:
+    db_medico = models.Medico(**medico.model_dump())
+    db.add(db_medico)
+    db.commit()
+    db.refresh(db_medico)
+    return db_medico
 
-def get_medico_by_id(medico_id: int) -> Optional[MedicoResponse]:
-    """Busca médico por ID"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM medico WHERE id = ?", (medico_id,))
-        medico_data = cursor.fetchone()
-        
-        if not medico_data:
-            return None
-            
-        return MedicoResponse(
-            id=medico_data['id'],
-            nome=medico_data['nome'],
-            especialidade=medico_data['especialidade'],
-            created_at=datetime.fromisoformat(medico_data['created_at']),
-            updated_at=datetime.fromisoformat(medico_data['updated_at'])
-        )
+def get_medico(db: Session, medico_id: int) -> Optional[models.Medico]:
+    return db.query(models.Medico).filter(models.Medico.id == medico_id).first()
 
-def get_medicos_by_name(nome: str) -> List[MedicoResponse]:
+def get_medicos(db: Session, skip: int = 0, limit: int = 100) -> List[models.Medico]:
+    return db.query(models.Medico).offset(skip).limit(limit).all()
+
+def get_medicos_by_name(db: Session, nome: str) -> List[models.Medico]:
     """Busca médicos por nome (busca parcial)"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM medico 
-            WHERE nome LIKE ? 
-            ORDER BY nome
-        """, (f"%{nome}%",))
-        
-        medicos_data = cursor.fetchall()
-        
-        return [
-            MedicoResponse(
-                id=medico['id'],
-                nome=medico['nome'],
-                especialidade=medico['especialidade'],
-                created_at=datetime.fromisoformat(medico['created_at']),
-                updated_at=datetime.fromisoformat(medico['updated_at'])
-            )
-            for medico in medicos_data
-        ]
+    return db.query(models.Medico).filter(
+        models.Medico.nome.ilike(f"%{nome}%")
+    ).order_by(models.Medico.nome).all()
 
-def get_all_medicos() -> List[MedicoResponse]:
-    """Lista todos os médicos"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM medico ORDER BY nome")
-        medicos_data = cursor.fetchall()
-        
-        return [
-            MedicoResponse(
-                id=medico['id'],
-                nome=medico['nome'],
-                especialidade=medico['especialidade'],
-                created_at=datetime.fromisoformat(medico['created_at']),
-                updated_at=datetime.fromisoformat(medico['updated_at'])
-            )
-            for medico in medicos_data
-        ]
+def update_medico(db: Session, medico_id: int, medico: schemas.MedicoUpdate) -> Optional[models.Medico]:
+    db_medico = get_medico(db, medico_id)
+    if not db_medico:
+        return None
+    
+    update_data = medico.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_medico, field, value)
+    
+    db.commit()
+    db.refresh(db_medico)
+    return db_medico
 
-def update_medico(medico_id: int, medico_update: MedicoUpdate) -> Optional[MedicoResponse]:
-    """Atualiza um médico"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        
-        # Verificar se o médico existe
-        cursor.execute("SELECT * FROM medico WHERE id = ?", (medico_id,))
-        if not cursor.fetchone():
-            return None
-        
-        # Construir query de atualização dinamicamente
-        update_fields = []
-        update_values = []
-        
-        if medico_update.nome is not None:
-            update_fields.append("nome = ?")
-            update_values.append(medico_update.nome)
-            
-        if medico_update.especialidade is not None:
-            update_fields.append("especialidade = ?")
-            update_values.append(medico_update.especialidade)
-        
-        if not update_fields:
-            return get_medico_by_id(medico_id)
-        
-        update_fields.append("updated_at = CURRENT_TIMESTAMP")
-        update_values.append(medico_id)
-        
-        query = f"UPDATE medico SET {', '.join(update_fields)} WHERE id = ?"
-        cursor.execute(query, update_values)
-        conn.commit()
-        
-        return get_medico_by_id(medico_id)
+def delete_medico(db: Session, medico_id: int) -> bool:
+    db_medico = get_medico(db, medico_id)
+    if not db_medico:
+        return False
+    
+    db.delete(db_medico)
+    db.commit()
+    return True
 
-def delete_medico(medico_id: int) -> bool:
-    """Deleta um médico"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        
-        # Verificar se o médico existe
-        cursor.execute("SELECT id FROM medico WHERE id = ?", (medico_id,))
-        if not cursor.fetchone():
-            return False
-        
-        cursor.execute("DELETE FROM medico WHERE id = ?", (medico_id,))
-        conn.commit()
-        
-        return True 
+# CRUD para Agenda
+def create_agenda(db: Session, agenda: schemas.AgendaCreate) -> models.Agenda:
+    db_agenda = models.Agenda(**agenda.model_dump())
+    db.add(db_agenda)
+    db.commit()
+    db.refresh(db_agenda)
+    return db_agenda
+
+def criar_agenda(db: Session, agenda: schemas.AgendaCreate) -> models.Agenda:
+    """Cria um novo slot de agenda (status 'livre')"""
+    db_agenda = models.Agenda(**agenda.model_dump())
+    db.add(db_agenda)
+    db.commit()
+    db.refresh(db_agenda)
+    return db_agenda
+
+def get_agenda(db: Session, agenda_id: int) -> Optional[models.Agenda]:
+    return db.query(models.Agenda).filter(models.Agenda.id == agenda_id).first()
+
+def get_agendas(db: Session, skip: int = 0, limit: int = 100) -> List[models.Agenda]:
+    return db.query(models.Agenda).offset(skip).limit(limit).all()
+
+def get_agendas_by_medico(db: Session, medico_id: int, skip: int = 0, limit: int = 100) -> List[models.Agenda]:
+    return db.query(models.Agenda).filter(models.Agenda.medico_id == medico_id).offset(skip).limit(limit).all()
+
+def get_agendas_by_date_range(db: Session, start_date: datetime, end_date: datetime) -> List[models.Agenda]:
+    return db.query(models.Agenda).filter(
+        and_(models.Agenda.data >= start_date, models.Agenda.data <= end_date)
+    ).all()
+
+def listar_agendas_livres(db: Session, medico_id: int, data: datetime) -> List[models.Agenda]:
+    """Lista todos os horários livres de um médico em uma data"""
+    return db.query(models.Agenda).filter(
+        and_(
+            models.Agenda.medico_id == medico_id,
+            models.Agenda.data >= data.replace(hour=0, minute=0, second=0, microsecond=0),
+            models.Agenda.data < data.replace(hour=23, minute=59, second=59, microsecond=999999),
+            models.Agenda.status == "livre"
+        )
+    ).order_by(models.Agenda.data).all()
+
+def listar_agendas_ocupadas(db: Session, medico_id: int) -> List[models.Agenda]:
+    """Lista todos os horários ocupados de um médico"""
+    return db.query(models.Agenda).filter(
+        and_(
+            models.Agenda.medico_id == medico_id,
+            models.Agenda.status == "ocupado"
+        )
+    ).order_by(models.Agenda.data).all()
+
+def marcar_consulta(db: Session, agenda_id: int) -> bool:
+    """Marca uma consulta (muda status de 'livre' para 'ocupado')"""
+    db_agenda = get_agenda(db, agenda_id)
+    if not db_agenda or db_agenda.status != "livre":
+        return False
+    
+    db_agenda.status = "ocupado"
+    db.commit()
+    return True
+
+def cancelar_consulta(db: Session, agenda_id: int) -> bool:
+    """Cancela uma consulta (muda status de 'ocupado' para 'livre')"""
+    db_agenda = get_agenda(db, agenda_id)
+    if not db_agenda or db_agenda.status != "ocupado":
+        return False
+    
+    db_agenda.status = "livre"
+    db.commit()
+    return True
+
+def deletar_agenda(db: Session, agenda_id: int) -> bool:
+    """Deleta um slot da agenda (só se estiver 'livre')"""
+    db_agenda = get_agenda(db, agenda_id)
+    if not db_agenda or db_agenda.status != "livre":
+        return False
+    
+    db.delete(db_agenda)
+    db.commit()
+    return True
+
+def update_agenda(db: Session, agenda_id: int, agenda: schemas.AgendaUpdate) -> Optional[models.Agenda]:
+    db_agenda = get_agenda(db, agenda_id)
+    if not db_agenda:
+        return None
+    
+    update_data = agenda.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_agenda, field, value)
+    
+    db.commit()
+    db.refresh(db_agenda)
+    return db_agenda
+
+def delete_agenda(db: Session, agenda_id: int) -> bool:
+    db_agenda = get_agenda(db, agenda_id)
+    if not db_agenda:
+        return False
+    
+    db.delete(db_agenda)
+    db.commit()
+    return True
+
+def get_agendas_livres(db: Session, medico_id: Optional[int] = None) -> List[models.Agenda]:
+    query = db.query(models.Agenda).filter(models.Agenda.status == "livre")
+    if medico_id:
+        query = query.filter(models.Agenda.medico_id == medico_id)
+    return query.all()

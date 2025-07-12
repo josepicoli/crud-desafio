@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from enum import Enum
 
 # Schemas para Médico
 class MedicoBase(BaseModel):
@@ -23,10 +24,14 @@ class MedicoResponse(MedicoBase):
         from_attributes = True
 
 # Schemas para Agenda
+class AgendaStatus(str, Enum):
+    livre = "livre"
+    ocupado = "ocupado"
+
 class AgendaBase(BaseModel):
     medico_id: int
     data: datetime
-    status: str
+    status: AgendaStatus
 
 class AgendaCreate(AgendaBase):
     pass
@@ -34,7 +39,7 @@ class AgendaCreate(AgendaBase):
 class AgendaUpdate(BaseModel):
     medico_id: Optional[int] = None
     data: Optional[datetime] = None
-    status: Optional[str] = None
+    status: Optional[AgendaStatus] = None
 
 class AgendaResponse(AgendaBase):
     id: int
