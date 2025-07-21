@@ -1,25 +1,22 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import os
+from decouple import config
 
 # Configuração do banco de dados SQLite
-DATABASE_URL = "sqlite:///./database.db"
+#DATABASE_URL = "sqlite:///./database.db"
+DATABASE_URL = config("DATABASE_URL")
 
 # Engine para SQLite com configurações otimizadas
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
-    echo=False  # Set to True para debug SQL
+    echo=False
 )
 
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Base para os modelos
-Base = declarative_base()
 
 # Dependency para injeção de dependência
 def get_db():
@@ -28,9 +25,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-# Função para criar todas as tabelas
-def create_tables():
-    Base.metadata.create_all(bind=engine)
-
- 

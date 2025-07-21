@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 from .. import crud, schemas
-from ..database import get_db
+from ..utils.db_utils import get_db
 
 router = APIRouter(prefix="/agenda", tags=["Agenda"])
 

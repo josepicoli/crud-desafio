@@ -1,27 +1,14 @@
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
-from app.database import create_tables
-from app.routers import medicos
-from app.routers import agenda
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Gerencia o ciclo de vida da aplicação"""
-    # Criar tabelas na inicialização
-    create_tables()
-    yield
+from routers import routers
 
 app = FastAPI(
     title="Agenda Médica API",
     description="API para gerenciamento de agenda médica",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
-# Incluir routers
-app.include_router(medicos.router)
-app.include_router(agenda.router)
+app.include_router(routers)
 
-@app.get("/")
-def read_root():
-    return {"message": "Bem-vindo à API de Agenda Médica"} 
+@app.get("/status")
+def status():
+    return {"message": "api funcionando"}
